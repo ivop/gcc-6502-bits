@@ -68,6 +68,9 @@ machine_specific_dir ()
     c64)
       echo c64
       ;;
+    atari)
+      echo atari
+      ;;
     *)
       echo "Unknown OS dir: $osdir" 1>&2
       exit 1

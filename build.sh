@@ -71,6 +71,8 @@ mkdir -p "$thisdir/prefix/6502/bbcm/lib/cc65/cfg"
 install ldscripts/bbcmaster.cfg "$thisdir/prefix/6502/bbcm/lib/cc65/cfg"
 mkdir -p "$thisdir/prefix/6502/c64/lib/cc65/cfg"
 install ldscripts/c64.cfg "$thisdir/prefix/6502/c64/lib/cc65/cfg"
+mkdir -p "$thisdir/prefix/6502/atari/lib/cc65/cfg"
+install ldscripts/atari.cfg "$thisdir/prefix/6502/atari/lib/cc65/cfg"
 fi
 
 if [ "$startpos" -le 3 ] && [ "$endpos" -ge 3 ]; then
