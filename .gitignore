@@ -1,6 +1,7 @@
 gcc-src/*
 *~
-libtinyc
+*.o
+*.a
 build.log
 gcc-build-2
 gcc-build
