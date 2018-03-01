@@ -1,6 +1,7 @@
 #include <stdarg.h>
 
 #include "stdio.h"
+#include "string.h"
 
 char __m65x_char_to_file = 1;
 
@@ -17,12 +18,22 @@ emit_char (int c, FILE *f)
     }
 }
 
+/* A version of fputs that knows about the __m65x_char_to_file hack.  */
+static void
+sfputs (const char *str, FILE *f)
+{
+  const char *iter;
+  for (iter = str; *iter; iter++)
+    emit_char (*iter, f);
+}
+
 #define M65X_FLOAT_PRINT
 
-static void print_udec (FILE *f, unsigned int val)
+static int print_udec (FILE *f, unsigned long val)
 {
-  char digits[5];
+  char digits[10];
   int c = 0;
+  int printed = 0;
   
   do
     {
@@ -30,53 +41,70 @@ static void print_udec (FILE *f, unsigned int val)
       val = val / 10;
     }
   while (val > 0);
-  
+
   for (--c; c >= 0; c--)
-    emit_char (digits[c] + '0', f);
+    {
+      emit_char (digits[c] + '0', f);
+      printed++;
+    }
+
+  return printed;
 }
 
-static void print_sdec (FILE *f, int val)
+static int print_sdec (FILE *f, long val)
 {
+  int printed = 0;
   if (val < 0)
     {
       emit_char ('-', f);
-      print_udec (f, -val);
+      printed += print_udec (f, -val) + 1;
     }
   else
-    print_udec (f, val);
+    printed += print_udec (f, val);
+
+  return printed;
 }
 
-static void print_hex (FILE *f, unsigned int val)
+static int print_hex (FILE *f, unsigned long val)
 {
   unsigned char seen_nonzero = 0;
+  int printed = 0;
   int i;
   
-  for (i = 3; i >= 0; i--)
+  for (i = 7; i >= 0; i--)
     {
-      unsigned char nybble = (val >> 12) & 0xf;
+      unsigned char nybble = (val >> 28) & 0xf;
       
       if (nybble > 0 || i == 0 || seen_nonzero)
-	emit_char (nybble < 10 ? nybble + '0' : nybble - 10 + 'a', f);
+        {
+	  emit_char (nybble < 10 ? nybble + '0' : nybble - 10 + 'a', f);
+          printed++;
+        }
       
       if (nybble != 0)
         seen_nonzero = 1;
 
       val <<= 4;
     }
+
+  return printed;
 }
 
 #ifdef M65X_FLOAT_PRINT
 extern signed char __m65x_ftoa (char *, float);
 
-static void
+static int
 print_float (FILE *f, float x)
 {
   signed char exp;
+  int printed = 0;
   char output[16];
   exp = __m65x_ftoa (&output[0], x);
-  fputs (output, f);
+  sfputs (output, f);
+  printed = strlen (output);
   if (exp != 0)
-    fprintf (f, "E%d", exp);
+    printed += fprintf (f, "E%d", exp);
+  return printed;
 }
 #endif
 
@@ -89,58 +117,103 @@ int vfprintf (FILE *f, const char *fmt, va_list ap)
     {
       if (*fmt == '%')
         {
+	retry:
 	  switch (*++fmt)
 	    {
+            case 'c':
+              {
+                int val = va_arg (ap, int);
+                emit_char (val, f);
+                printed++;
+              }
+              break;
+
+	    case 'l':
+	      {
+	        switch (*++fmt)
+		  {
+		  case 'd':
+		    {
+		      long val = va_arg (ap, long);
+		      printed += print_sdec (f, val);
+		    }
+		    break;
+
+		  case 'u':
+		    {
+		      unsigned long val = va_arg (ap, unsigned long);
+		      printed += print_udec (f, val);
+		    }
+		    break;
+
+		  case 'x':
+		    {
+		      unsigned long val = va_arg (ap, unsigned long);
+		      printed += print_hex (f, val);
+		    }
+		    break;
+
+		  default:
+		    ;
+		  }
+	      }
+	      break;
+
 	    case 'd':
 	      {
 	        int val = va_arg (ap, int);
-		print_sdec (f, val);
+		printed += print_sdec (f, val);
 	      }
 	      break;
 	      
 	    case 'u':
 	      {
 	        unsigned int val = va_arg (ap, unsigned int);
-		print_udec (f, val);
+		printed += print_udec (f, val);
 	      }
 	      break;
 
 	    case 's':
 	      {
 		char *str = va_arg (ap, char *);
-		fputs (str, f);
+		sfputs (str, f);
+                printed += strlen (str);
 	      }
 	      break;
 
 	    case 'p':
 	    case 'x':
 	      {
-	        int val = va_arg (ap, int);
-		print_hex (f, val);
+	        unsigned int val = va_arg (ap, unsigned int);
+		printed += print_hex (f, val);
 	      }
 	      break;
 
 	    case '%':
 	      emit_char ('%', f);
+              printed++;
 	      break;
 
 #ifdef M65X_FLOAT_PRINT
 	    case 'f':
 	      {
 		float val = va_arg (ap, double);
-		print_float (f, val);
+		printed += print_float (f, val);
 	      }
 	      break;
 #endif
 	    default:
-	      ;
+	      /* Just skip unknown % formatting codes.  */
+	      goto retry;
 	    }
 	}
       else
-        emit_char (*fmt, f);
+        {
+          emit_char (*fmt, f);
+          printed++;
+        }
 
       fmt++;
-      printed++;
     }
 
   /* Zero-terminate if printing to string.  */
