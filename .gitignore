@@ -1,2 +1,7 @@
 gcc-src/*
 *~
+libtinyc
+build.log
+gcc-build-2
+gcc-build
+prefix
